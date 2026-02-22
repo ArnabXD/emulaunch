@@ -143,9 +143,7 @@ pub fn get_android_emulator_cmd() -> Result<String, CommandNotFoundError> {
     return Ok("emulator".to_string());
   }
 
-  let suggestion = format!(
-        "Install Android SDK or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/emulator/emulator\n  Linux: ~/Android/Sdk/emulator/emulator\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\emulator\\emulator.exe"
-    );
+  let suggestion = "Install Android SDK or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/emulator/emulator\n  Linux: ~/Android/Sdk/emulator/emulator\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\emulator\\emulator.exe".to_string();
 
   Err(CommandNotFoundError::AndroidEmulator { suggestion })
 }
@@ -195,9 +193,7 @@ pub fn get_adb_cmd() -> Result<String, CommandNotFoundError> {
     return Ok("adb".to_string());
   }
 
-  let suggestion = format!(
-        "Install Android SDK Platform-Tools or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~/Android/Sdk/platform-tools/adb\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\platform-tools\\adb.exe"
-    );
+  let suggestion = "Install Android SDK Platform-Tools or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~/Android/Sdk/platform-tools/adb\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\platform-tools\\adb.exe".to_string();
 
   Err(CommandNotFoundError::Adb { suggestion })
 }
