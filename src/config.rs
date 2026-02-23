@@ -52,6 +52,7 @@ const SUGGESTION_ANDROID_SDK: &str = "Install Android SDK or add it to PATH.\n\
 Common locations:\n  macOS: ~/Library/Android/sdk/emulator/emulator\n  Linux: ~/Android/Sdk/emulator/emulator\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\emulator\\emulator.exe";
 const SUGGESTION_ADB: &str = "Install Android SDK Platform-Tools or add it to PATH.\n\
 Common locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~/Android/Sdk/platform-tools/adb\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\platform-tools\\adb.exe";
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const SUGGESTION_XCRUN: &str = "Install Xcode Command Line Tools: xcode-select --install";
 
 /// Platform-specific Android SDK paths

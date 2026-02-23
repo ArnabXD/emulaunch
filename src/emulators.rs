@@ -6,6 +6,7 @@ use std::process::Stdio;
 // State constants
 pub const STATE_BOOTED: &str = "Booted";
 pub const STATE_SHUTDOWN: &str = "Shutdown";
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub const STATE_AVAILABLE: &str = "Available";
 
 // Section headers
