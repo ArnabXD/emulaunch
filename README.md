@@ -22,7 +22,7 @@ Download prebuilt binaries from the [Releases](https://github.com/ArnabXD/emulau
 Supported platforms:
 - macOS (Intel x86_64 and Apple Silicon aarch64)
 - Linux (x86_64 and ARM64)
-- Windows (x86_64)
+- Windows (x86_64) — includes MSI installer
 
 ### From Source
 

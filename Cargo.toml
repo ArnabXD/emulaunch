@@ -1,9 +1,17 @@
 [package]
 name = "emulaunch"
-version = "0.1.0-beta-05"
+version = "0.1.0-beta-06"
 edition = "2021"
+authors = ["ArnabXD"]
+description = "Interactive TUI for listing and launching Android emulators and iOS simulators"
 license = "MIT"
 repository = "https://github.com/ArnabXD/emulaunch"
+
+[package.metadata.wix]
+upgrade-guid = "4DA9601E-80B6-45F8-AFE3-3FB1B1097C11"
+path-guid = "61A8152C-F45C-4136-B94E-0C74E9C37475"
+license = false
+eula = false
 
 [[bin]]
 name = "emulaunch"
