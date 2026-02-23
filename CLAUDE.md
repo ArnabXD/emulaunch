@@ -49,9 +49,14 @@ cargo run
 cargo run -- list
 cargo run -- open <name>
 
-# Run linter
-cargo clippy
+# Run linter (CI runs with -D warnings, so fix all warnings)
+cargo clippy --all-targets -- -D warnings
+
+# Format code (2-space indentation via rustfmt.toml)
+cargo fmt
 ```
+
+**No test suite exists.** There are no unit or integration tests in this project.
 
 ## Architecture
 
@@ -75,10 +80,6 @@ Platform-specific default paths checked:
 - **macOS**: `~/Library/Android/sdk/emulator/emulator`, `~/Library/Android/sdk/platform-tools/adb`
 - **Linux**: `~/Android/Sdk/emulator/emulator`, `~/Android/Sdk/platform-tools/adb`
 - **Windows**: `%LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe`, `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`
-
-### Code Style
-
-- Use `cargo fmt` to format (configured for 2-space indentation in `rustfmt.toml`)
 
 ### Core Types (`src/emulators.rs`)
 
@@ -146,6 +147,7 @@ Each release includes:
 
 ### CI/CD Configuration
 
-- `.github/workflows/release.yml` - GitHub Actions workflow for building releases
-- `cargo-dist.toml` - cargo-dist configuration for target platforms
+- `.github/workflows/ci.yml` - Runs `cargo check`, `cargo clippy -- -D warnings` on Ubuntu; builds on Ubuntu, macOS, and Windows
+- `.github/workflows/release.yml` - GitHub Actions workflow for building releases via `cargo-dist`
+- `dist-workspace.toml` - dist configuration for target platforms
 - `install.sh` - Shell installer script for end users
