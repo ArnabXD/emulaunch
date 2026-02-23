@@ -13,10 +13,16 @@ pub struct Config {
 
 #[derive(Debug)]
 pub enum CommandNotFoundError {
-  AndroidEmulator { suggestion: String },
-  Adb { suggestion: String },
+  AndroidEmulator {
+    suggestion: String,
+  },
+  Adb {
+    suggestion: String,
+  },
   #[cfg(target_os = "macos")]
-  Xcrun { suggestion: String },
+  Xcrun {
+    suggestion: String,
+  },
 }
 
 impl std::fmt::Display for CommandNotFoundError {
@@ -40,6 +46,53 @@ impl std::fmt::Display for CommandNotFoundError {
 }
 
 impl std::error::Error for CommandNotFoundError {}
+
+// Error message constants
+const SUGGESTION_ANDROID_SDK: &str = "Install Android SDK or add it to PATH.\n\
+Common locations:\n  macOS: ~/Library/Android/sdk/emulator/emulator\n  Linux: ~/Android/Sdk/emulator/emulator\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\emulator\\emulator.exe";
+const SUGGESTION_ADB: &str = "Install Android SDK Platform-Tools or add it to PATH.\n\
+Common locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~/Android/Sdk/platform-tools/adb\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\platform-tools\\adb.exe";
+const SUGGESTION_XCRUN: &str = "Install Xcode Command Line Tools: xcode-select --install";
+
+/// Platform-specific Android SDK paths
+fn get_android_emulator_paths() -> Vec<PathBuf> {
+  let home = match dirs::home_dir() {
+    Some(h) => h,
+    None => return Vec::new(),
+  };
+
+  #[cfg(target_os = "macos")]
+  return vec![home.join("Library/Android/sdk/emulator/emulator")];
+
+  #[cfg(target_os = "linux")]
+  return vec![home.join("Android/Sdk/emulator/emulator")];
+
+  #[cfg(target_os = "windows")]
+  return vec![home.join("AppData/Local/Android/Sdk/emulator/emulator.exe")];
+
+  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+  return Vec::new();
+}
+
+/// Platform-specific ADB paths
+fn get_adb_paths() -> Vec<PathBuf> {
+  let home = match dirs::home_dir() {
+    Some(h) => h,
+    None => return Vec::new(),
+  };
+
+  #[cfg(target_os = "macos")]
+  return vec![home.join("Library/Android/sdk/platform-tools/adb")];
+
+  #[cfg(target_os = "linux")]
+  return vec![home.join("Android/Sdk/platform-tools/adb")];
+
+  #[cfg(target_os = "windows")]
+  return vec![home.join("AppData/Local/Android/Sdk/platform-tools/adb.exe")];
+
+  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+  return Vec::new();
+}
 
 pub fn get_config_paths() -> Vec<PathBuf> {
   let mut paths = Vec::new();
@@ -100,130 +153,84 @@ fn file_exists(path: &str) -> bool {
   PathBuf::from(path).exists()
 }
 
-pub fn get_android_emulator_cmd() -> Result<String, CommandNotFoundError> {
+/// Generic command resolution helper
+fn resolve_command<F>(
+  config_key: F,
+  env_var: &str,
+  default_cmd: &str,
+  platform_paths: Vec<PathBuf>,
+  error_variant: fn(String) -> CommandNotFoundError,
+) -> Result<String, CommandNotFoundError>
+where
+  F: Fn(&Config) -> Option<&String>,
+{
   // Check config first
   if let Some(config) = load_config() {
-    if let Some(ref cmd) = config.android_emulator_cmd {
+    if let Some(cmd) = config_key(&config) {
       if command_exists(cmd) || file_exists(cmd) {
-        return Ok(cmd.clone());
+        return Ok(cmd.to_string());
       }
     }
   }
 
   // Check environment variable
-  if let Ok(cmd) = std::env::var("ANDROID_EMULATOR_CMD") {
+  if let Ok(cmd) = std::env::var(env_var) {
     if command_exists(&cmd) || file_exists(&cmd) {
       return Ok(cmd);
     }
   }
 
-  // Try common platform-specific paths
-  let home = dirs::home_dir().ok_or(CommandNotFoundError::AndroidEmulator {
-    suggestion: "Could not determine home directory".to_string(),
-  })?;
-
-  #[cfg(target_os = "macos")]
-  let common_paths = vec![home.join("Library/Android/sdk/emulator/emulator")];
-
-  #[cfg(target_os = "linux")]
-  let common_paths = vec![home.join("Android/Sdk/emulator/emulator")];
-
-  #[cfg(target_os = "windows")]
-  let common_paths = vec![home.join("AppData/Local/Android/Sdk/emulator/emulator.exe")];
-
-  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-  let common_paths: Vec<PathBuf> = vec![];
-
-  for path in &common_paths {
+  // Try platform-specific paths
+  for path in &platform_paths {
     if path.exists() {
       return Ok(path.to_string_lossy().to_string());
     }
   }
 
   // Fall back to simple command name
-  if command_exists("emulator") {
-    return Ok("emulator".to_string());
+  if command_exists(default_cmd) {
+    return Ok(default_cmd.to_string());
   }
 
-  let suggestion = "Install Android SDK or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/emulator/emulator\n  Linux: ~/Android/Sdk/emulator/emulator\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\emulator\\emulator.exe".to_string();
+  // Return error - caller provides specific suggestion
+  Err(error_variant(
+    "Command not found in PATH or common locations".to_string(),
+  ))
+}
 
-  Err(CommandNotFoundError::AndroidEmulator { suggestion })
+pub fn get_android_emulator_cmd() -> Result<String, CommandNotFoundError> {
+  resolve_command(
+    |c| c.android_emulator_cmd.as_ref(),
+    "ANDROID_EMULATOR_CMD",
+    "emulator",
+    get_android_emulator_paths(),
+    |msg| CommandNotFoundError::AndroidEmulator {
+      suggestion: format!("{}\n\n{}", msg, SUGGESTION_ANDROID_SDK),
+    },
+  )
 }
 
 pub fn get_adb_cmd() -> Result<String, CommandNotFoundError> {
-  // Check config first
-  if let Some(config) = load_config() {
-    if let Some(ref cmd) = config.adb_cmd {
-      if command_exists(cmd) || file_exists(cmd) {
-        return Ok(cmd.clone());
-      }
-    }
-  }
-
-  // Check environment variable
-  if let Ok(cmd) = std::env::var("ADB_CMD") {
-    if command_exists(&cmd) || file_exists(&cmd) {
-      return Ok(cmd);
-    }
-  }
-
-  // Try common platform-specific paths
-  let home = dirs::home_dir().ok_or(CommandNotFoundError::Adb {
-    suggestion: "Could not determine home directory".to_string(),
-  })?;
-
-  #[cfg(target_os = "macos")]
-  let common_paths = vec![home.join("Library/Android/sdk/platform-tools/adb")];
-
-  #[cfg(target_os = "linux")]
-  let common_paths = vec![home.join("Android/Sdk/platform-tools/adb")];
-
-  #[cfg(target_os = "windows")]
-  let common_paths = vec![home.join("AppData/Local/Android/Sdk/platform-tools/adb.exe")];
-
-  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-  let common_paths: Vec<PathBuf> = vec![];
-
-  for path in &common_paths {
-    if path.exists() {
-      return Ok(path.to_string_lossy().to_string());
-    }
-  }
-
-  // Fall back to simple command name
-  if command_exists("adb") {
-    return Ok("adb".to_string());
-  }
-
-  let suggestion = "Install Android SDK Platform-Tools or add it to PATH.\nCommon locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~/Android/Sdk/platform-tools/adb\n  Windows: %LOCALAPPDATA%\\Android\\Sdk\\platform-tools\\adb.exe".to_string();
-
-  Err(CommandNotFoundError::Adb { suggestion })
+  resolve_command(
+    |c| c.adb_cmd.as_ref(),
+    "ADB_CMD",
+    "adb",
+    get_adb_paths(),
+    |msg| CommandNotFoundError::Adb {
+      suggestion: format!("{}\n\n{}", msg, SUGGESTION_ADB),
+    },
+  )
 }
 
 #[cfg(target_os = "macos")]
 pub fn get_xcrun_cmd() -> Result<String, CommandNotFoundError> {
-  // Check config first
-  if let Some(config) = load_config() {
-    if let Some(ref cmd) = config.xcrun_cmd {
-      if command_exists(cmd) || file_exists(cmd) {
-        return Ok(cmd.clone());
-      }
-    }
-  }
-
-  // Check environment variable
-  if let Ok(cmd) = std::env::var("XCRUN_CMD") {
-    if command_exists(&cmd) || file_exists(&cmd) {
-      return Ok(cmd);
-    }
-  }
-
-  // Fall back to simple command name
-  if command_exists("xcrun") {
-    return Ok("xcrun".to_string());
-  }
-
-  let suggestion = "Install Xcode Command Line Tools: xcode-select --install".to_string();
-
-  Err(CommandNotFoundError::Xcrun { suggestion })
+  resolve_command(
+    |c| c.xcrun_cmd.as_ref(),
+    "XCRUN_CMD",
+    "xcrun",
+    Vec::new(), // xcrun is typically in PATH, not a fixed path
+    |msg| CommandNotFoundError::Xcrun {
+      suggestion: format!("{}\n\n{}", msg, SUGGESTION_XCRUN),
+    },
+  )
 }

@@ -177,6 +177,14 @@ impl App {
   }
 }
 
+fn state_color(state: &str) -> Color {
+  match state {
+    emulators::STATE_BOOTED => Color::Green,
+    emulators::STATE_SHUTDOWN => Color::Red,
+    _ => Color::Yellow,
+  }
+}
+
 fn run_tui() -> io::Result<()> {
   let entries = emulators::collect_all_entries();
   if entries.is_empty() {
@@ -244,40 +252,32 @@ fn run_app(
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
             ))),
-            EmulatorEntry::Android(e) => {
-              let state_color = match e.state.as_str() {
-                "Booted" => Color::Green,
-                "Shutdown" => Color::Red,
-                _ => Color::Yellow,
-              };
-              ListItem::new(Line::from(vec![
-                Span::raw("   "),
-                Span::styled(&e.name, Style::default().fg(Color::Green)),
-                Span::raw("  "),
-                Span::styled(format!("[{}]", e.state), Style::default().fg(state_color)),
-                Span::styled(
-                  format!("  ({})", e.device_type),
-                  Style::default().fg(Color::DarkGray),
-                ),
-              ]))
-            }
-            EmulatorEntry::IOS(s) => {
-              let state_color = match s.state.as_str() {
-                "Booted" => Color::Green,
-                "Shutdown" => Color::Red,
-                _ => Color::Yellow,
-              };
-              ListItem::new(Line::from(vec![
-                Span::raw("   "),
-                Span::styled(&s.name, Style::default().fg(Color::Green)),
-                Span::raw("  "),
-                Span::styled(format!("[{}]", s.state), Style::default().fg(state_color)),
-                Span::styled(
-                  format!("  ({})", s.runtime),
-                  Style::default().fg(Color::DarkGray),
-                ),
-              ]))
-            }
+            EmulatorEntry::Android(e) => ListItem::new(Line::from(vec![
+              Span::raw("   "),
+              Span::styled(&e.name, Style::default().fg(Color::Green)),
+              Span::raw("  "),
+              Span::styled(
+                format!("[{}]", e.state),
+                Style::default().fg(state_color(&e.state)),
+              ),
+              Span::styled(
+                format!("  ({})", e.device_type),
+                Style::default().fg(Color::DarkGray),
+              ),
+            ])),
+            EmulatorEntry::IOS(s) => ListItem::new(Line::from(vec![
+              Span::raw("   "),
+              Span::styled(&s.name, Style::default().fg(Color::Green)),
+              Span::raw("  "),
+              Span::styled(
+                format!("[{}]", s.state),
+                Style::default().fg(state_color(&s.state)),
+              ),
+              Span::styled(
+                format!("  ({})", s.runtime),
+                Style::default().fg(Color::DarkGray),
+              ),
+            ])),
           }
         })
         .collect();

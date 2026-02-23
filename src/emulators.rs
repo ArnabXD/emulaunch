@@ -3,6 +3,23 @@ use crate::config;
 use std::fmt;
 use std::process::Stdio;
 
+// State constants
+pub const STATE_BOOTED: &str = "Booted";
+pub const STATE_SHUTDOWN: &str = "Shutdown";
+pub const STATE_AVAILABLE: &str = "Available";
+
+// Section headers
+pub const SECTION_ANDROID_EMULATORS: &str = "Android Emulators";
+pub const SECTION_IOS_SIMULATORS: &str = "iOS Simulators";
+
+// Device types
+pub const DEVICE_TYPE_AVD: &str = "AVD";
+pub const DEVICE_TYPE_RUNNING: &str = "Running Device";
+
+// Error messages
+#[allow(dead_code)]
+pub const ERR_IOS_ONLY_MACOS: &str = "iOS simulators are only available on macOS";
+
 #[derive(Debug, Clone)]
 pub struct AndroidEmulator {
   pub name: String,
@@ -57,26 +74,17 @@ impl fmt::Display for EmulatorEntry {
   }
 }
 
-fn get_android_emulator_cmd() -> String {
-  config::get_android_emulator_cmd().unwrap_or_else(|e| {
-    eprintln!("{}", e);
-    "emulator".to_string()
-  })
+fn get_android_emulator_cmd() -> Result<String, String> {
+  config::get_android_emulator_cmd().map_err(|e: config::CommandNotFoundError| e.to_string())
 }
 
-fn get_adb_cmd() -> String {
-  config::get_adb_cmd().unwrap_or_else(|e| {
-    eprintln!("{}", e);
-    "adb".to_string()
-  })
+fn get_adb_cmd() -> Result<String, String> {
+  config::get_adb_cmd().map_err(|e: config::CommandNotFoundError| e.to_string())
 }
 
 #[cfg(target_os = "macos")]
-fn get_xcrun_cmd() -> String {
-  config::get_xcrun_cmd().unwrap_or_else(|e| {
-    eprintln!("{}", e);
-    "xcrun".to_string()
-  })
+fn get_xcrun_cmd() -> Result<String, String> {
+  config::get_xcrun_cmd().map_err(|e: config::CommandNotFoundError| e.to_string())
 }
 
 /// Read the display name from an AVD's config.ini
@@ -95,33 +103,33 @@ fn get_avd_display_name(avd_id: &str) -> Option<String> {
 }
 
 /// Get the set of AVD names that are currently running via adb
-fn get_running_avd_names() -> Vec<String> {
-  let adb_cmd = get_adb_cmd();
+fn get_running_avd_names() -> Result<Vec<String>, String> {
+  let adb_cmd = get_adb_cmd()?;
 
   let output = std::process::Command::new(&adb_cmd)
     .args(["devices"])
-    .output();
+    .output()
+    .map_err(|e| format!("Failed to run adb devices: {}", e))?;
 
-  let serials: Vec<String> = match output {
-    Ok(result) if result.status.success() => {
-      let stdout = String::from_utf8_lossy(&result.stdout);
-      stdout
-        .lines()
-        .skip(1)
-        .filter_map(|line| {
-          let parts: Vec<&str> = line.split_whitespace().collect();
-          if parts.len() >= 2 && parts[1] == "device" && parts[0].starts_with("emulator-") {
-            Some(parts[0].to_string())
-          } else {
-            None
-          }
-        })
-        .collect()
-    }
-    _ => return Vec::new(),
-  };
+  if !output.status.success() {
+    return Ok(Vec::new());
+  }
 
-  serials
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  let serials: Vec<String> = stdout
+    .lines()
+    .skip(1)
+    .filter_map(|line| {
+      let parts: Vec<&str> = line.split_whitespace().collect();
+      if parts.len() >= 2 && parts[1] == "device" && parts[0].starts_with("emulator-") {
+        Some(parts[0].to_string())
+      } else {
+        None
+      }
+    })
+    .collect();
+
+  let names = serials
     .iter()
     .filter_map(|serial| {
       let result = std::process::Command::new(&adb_cmd)
@@ -135,7 +143,9 @@ fn get_running_avd_names() -> Vec<String> {
         None
       }
     })
-    .collect()
+    .collect();
+
+  Ok(names)
 }
 
 /// List AVDs by scanning ~/.android/avd/ directory
@@ -157,8 +167,8 @@ fn list_avds_from_directory() -> Result<Vec<AndroidEmulator>, String> {
           emulators.push(AndroidEmulator {
             name: display_name,
             id: stem.to_string(),
-            device_type: "AVD".to_string(),
-            state: "Shutdown".to_string(),
+            device_type: DEVICE_TYPE_AVD.to_string(),
+            state: STATE_SHUTDOWN.to_string(),
           });
         }
       }
@@ -173,8 +183,8 @@ fn list_avds_from_directory() -> Result<Vec<AndroidEmulator>, String> {
 }
 
 pub fn list_android_emulators() -> Result<Vec<AndroidEmulator>, String> {
-  let emulator_cmd = get_android_emulator_cmd();
-  let running_names = get_running_avd_names();
+  let emulator_cmd = get_android_emulator_cmd()?;
+  let running_names = get_running_avd_names().unwrap_or_default();
 
   let output = std::process::Command::new(&emulator_cmd)
     .arg("-list-avds")
@@ -191,14 +201,14 @@ pub fn list_android_emulators() -> Result<Vec<AndroidEmulator>, String> {
             let id = line.trim().to_string();
             let name = get_avd_display_name(&id).unwrap_or_else(|| id.clone());
             let state = if running_names.contains(&id) {
-              "Booted".to_string()
+              STATE_BOOTED.to_string()
             } else {
-              "Shutdown".to_string()
+              STATE_SHUTDOWN.to_string()
             };
             AndroidEmulator {
               name,
               id,
-              device_type: "AVD".to_string(),
+              device_type: DEVICE_TYPE_AVD.to_string(),
               state,
             }
           })
@@ -213,8 +223,8 @@ pub fn list_android_emulators() -> Result<Vec<AndroidEmulator>, String> {
 
   // Sort: booted first
   emulators.sort_by(|a, b| {
-    let a_booted = a.state == "Booted";
-    let b_booted = b.state == "Booted";
+    let a_booted = a.state == STATE_BOOTED;
+    let b_booted = b.state == STATE_BOOTED;
     b_booted.cmp(&a_booted)
   });
 
@@ -222,7 +232,7 @@ pub fn list_android_emulators() -> Result<Vec<AndroidEmulator>, String> {
 }
 
 fn list_android_devices_via_adb() -> Result<Vec<AndroidEmulator>, String> {
-  let adb_cmd = get_adb_cmd();
+  let adb_cmd = get_adb_cmd()?;
 
   let output = std::process::Command::new(&adb_cmd)
     .args(["devices", "-l"])
@@ -255,8 +265,8 @@ fn list_android_devices_via_adb() -> Result<Vec<AndroidEmulator>, String> {
         Some(AndroidEmulator {
           name,
           id,
-          device_type: "Running Device".to_string(),
-          state: "Booted".to_string(),
+          device_type: DEVICE_TYPE_RUNNING.to_string(),
+          state: STATE_BOOTED.to_string(),
         })
       })
       .collect(),
@@ -265,7 +275,7 @@ fn list_android_devices_via_adb() -> Result<Vec<AndroidEmulator>, String> {
 
 #[cfg(target_os = "macos")]
 pub fn list_ios_simulators() -> Result<Vec<IOSSimulator>, String> {
-  let xcrun = get_xcrun_cmd();
+  let xcrun = get_xcrun_cmd()?;
 
   let output = std::process::Command::new(&xcrun)
     .args(["simctl", "list", "devices", "available", "--json"])
@@ -285,7 +295,7 @@ pub fn list_ios_simulators() -> Result<Vec<IOSSimulator>, String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn list_ios_simulators() -> Result<Vec<IOSSimulator>, String> {
-  Err("iOS simulators are only available on macOS".to_string())
+  Err(ERR_IOS_ONLY_MACOS.to_string())
 }
 
 #[cfg(target_os = "macos")]
@@ -314,7 +324,7 @@ fn parse_ios_simulators(json: &str) -> Result<Vec<IOSSimulator>, String> {
             continue;
           };
 
-          if matches!(state, "Booted" | "Shutdown" | "Available") {
+          if matches!(state, STATE_BOOTED | STATE_SHUTDOWN | STATE_AVAILABLE) {
             simulators.push(IOSSimulator {
               name: name.to_string(),
               udid: udid.to_string(),
@@ -331,7 +341,7 @@ fn parse_ios_simulators(json: &str) -> Result<Vec<IOSSimulator>, String> {
 }
 
 pub fn open_android_emulator(name: &str) -> Result<String, String> {
-  let emulator_cmd = get_android_emulator_cmd();
+  let emulator_cmd = get_android_emulator_cmd()?;
 
   std::process::Command::new(&emulator_cmd)
     .args(["-avd", name])
@@ -346,7 +356,7 @@ pub fn open_android_emulator(name: &str) -> Result<String, String> {
 
 #[cfg(target_os = "macos")]
 pub fn open_ios_simulator(udid: &str) -> Result<String, String> {
-  let xcrun = get_xcrun_cmd();
+  let xcrun = get_xcrun_cmd()?;
 
   let boot_output = std::process::Command::new(&xcrun)
     .args(["simctl", "boot", udid])
@@ -379,7 +389,7 @@ pub fn open_ios_simulator(udid: &str) -> Result<String, String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn open_ios_simulator(_udid: &str) -> Result<String, String> {
-  Err("iOS simulators are only available on macOS".to_string())
+  Err(ERR_IOS_ONLY_MACOS.to_string())
 }
 
 pub fn find_emulator(name: &str) -> Result<EmulatorType, String> {
@@ -405,7 +415,7 @@ pub fn collect_all_entries() -> Vec<EmulatorEntry> {
   let android = list_android_emulators().unwrap_or_default();
   if !android.is_empty() {
     entries.push(EmulatorEntry::SectionHeader(
-      "Android Emulators".to_string(),
+      SECTION_ANDROID_EMULATORS.to_string(),
     ));
     for emu in android {
       entries.push(EmulatorEntry::Android(emu));
@@ -414,7 +424,9 @@ pub fn collect_all_entries() -> Vec<EmulatorEntry> {
 
   let ios = list_ios_simulators().unwrap_or_default();
   if !ios.is_empty() {
-    entries.push(EmulatorEntry::SectionHeader("iOS Simulators".to_string()));
+    entries.push(EmulatorEntry::SectionHeader(
+      SECTION_IOS_SIMULATORS.to_string(),
+    ));
     for sim in ios {
       entries.push(EmulatorEntry::IOS(sim));
     }
@@ -438,7 +450,8 @@ pub fn format_emulator_list() -> String {
 
   match list_android_emulators() {
     Ok(android) if !android.is_empty() => {
-      output.push_str("Android Emulators:\n");
+      output.push_str(SECTION_ANDROID_EMULATORS);
+      output.push_str(":\n");
       for emu in android {
         output.push_str(&format!(
           "  {} [{}] ({})\n",
@@ -453,7 +466,8 @@ pub fn format_emulator_list() -> String {
 
   match list_ios_simulators() {
     Ok(ios) if !ios.is_empty() => {
-      output.push_str("iOS Simulators:\n");
+      output.push_str(SECTION_IOS_SIMULATORS);
+      output.push_str(":\n");
       for sim in ios {
         output.push_str(&format!(
           "  {} [{}] ({})\n",
