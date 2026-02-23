@@ -56,8 +56,8 @@ emulaunch open <name>
 ## Configuration
 
 emulaunch looks for a TOML config file at:
-1. `~/.config/emulators/config.toml`
-2. `~/.emulators/config.toml` (fallback)
+1. `~/.config/emulaunch/config.toml`
+2. `~/.emulaunch/config.toml` (fallback)
 
 ```toml
 # Command paths (optional — auto-detected by default)

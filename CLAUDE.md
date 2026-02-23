@@ -17,8 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Android and iOS command paths are configurable. Priority: config file > environment variables > defaults.
 
 **Config file** (TOML format):
-- First checks `~/.config/emulators/config.toml`
-- Falls back to `~/.emulators/config.toml`
+- First checks `~/.config/emulaunch/config.toml`
+- Falls back to `~/.emulaunch/config.toml`
 
 ```toml
 android_emulator_cmd = "emulator"
