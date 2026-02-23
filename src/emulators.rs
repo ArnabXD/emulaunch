@@ -1,6 +1,5 @@
 use crate::config;
 
-use serde::Deserialize;
 use std::fmt;
 use std::process::Stdio;
 
@@ -291,7 +290,7 @@ pub fn list_ios_simulators() -> Result<Vec<IOSSimulator>, String> {
 
 #[cfg(target_os = "macos")]
 fn parse_ios_simulators(json: &str) -> Result<Vec<IOSSimulator>, String> {
-  #[derive(Deserialize)]
+  #[derive(serde::Deserialize)]
   struct DevicesResponse {
     devices: serde_json::Value,
   }
