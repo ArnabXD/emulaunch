@@ -9,6 +9,36 @@ pub struct Config {
   pub adb_cmd: Option<String>,
   #[serde(default)]
   pub xcrun_cmd: Option<String>,
+  #[serde(default)]
+  pub theme: Option<String>,
+  #[serde(default)]
+  pub theme_overrides: Option<ThemeOverrides>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ThemeOverrides {
+  #[serde(default)]
+  pub header_fg: Option<String>,
+  #[serde(default)]
+  pub name_fg: Option<String>,
+  #[serde(default)]
+  pub state_booted_fg: Option<String>,
+  #[serde(default)]
+  pub state_shutdown_fg: Option<String>,
+  #[serde(default)]
+  pub state_unknown_fg: Option<String>,
+  #[serde(default)]
+  pub meta_fg: Option<String>,
+  #[serde(default)]
+  pub filter_placeholder_fg: Option<String>,
+  #[serde(default)]
+  pub filter_active_fg: Option<String>,
+  #[serde(default)]
+  pub selection_bg: Option<String>,
+  #[serde(default)]
+  pub help_key_fg: Option<String>,
+  #[serde(default)]
+  pub help_text_fg: Option<String>,
 }
 
 #[derive(Debug)]
@@ -100,12 +130,12 @@ pub fn get_config_paths() -> Vec<PathBuf> {
 
   // Try XDG config directory first
   if let Some(config_dir) = dirs::config_dir() {
-    paths.push(config_dir.join("emulators").join("config.toml"));
+    paths.push(config_dir.join("emulaunch").join("config.toml"));
   }
 
   // Fallback to home directory
   if let Some(home_dir) = dirs::home_dir() {
-    paths.push(home_dir.join(".emulators").join("config.toml"));
+    paths.push(home_dir.join(".emulaunch").join("config.toml"));
   }
 
   paths

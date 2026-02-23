@@ -1,5 +1,6 @@
 mod config;
 mod emulators;
+mod theme;
 
 use clap::{Parser, Subcommand};
 use crossterm::{
@@ -10,7 +11,7 @@ use crossterm::{
 use emulators::{EmulatorEntry, EmulatorType};
 use ratatui::{
   layout::{Constraint, Layout},
-  style::{Color, Modifier, Style},
+  style::{Modifier, Style},
   text::{Line, Span},
   widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
   Terminal,
@@ -177,11 +178,11 @@ impl App {
   }
 }
 
-fn state_color(state: &str) -> Color {
+fn state_color(state: &str, theme: &theme::ThemeColors) -> ratatui::style::Color {
   match state {
-    emulators::STATE_BOOTED => Color::Green,
-    emulators::STATE_SHUTDOWN => Color::Red,
-    _ => Color::Yellow,
+    emulators::STATE_BOOTED => theme.state_booted_fg,
+    emulators::STATE_SHUTDOWN => theme.state_shutdown_fg,
+    _ => theme.state_unknown_fg,
   }
 }
 
@@ -192,13 +193,19 @@ fn run_tui() -> io::Result<()> {
     return Ok(());
   }
 
+  let cfg = config::load_config();
+  let theme = theme::resolve_theme(
+    cfg.as_ref().and_then(|c| c.theme.as_deref()),
+    cfg.as_ref().and_then(|c| c.theme_overrides.as_ref()),
+  );
+
   enable_raw_mode()?;
   io::stdout().execute(EnterAlternateScreen)?;
   let backend = ratatui::backend::CrosstermBackend::new(io::stdout());
   let mut terminal = Terminal::new(backend)?;
 
   let mut app = App::new(entries);
-  let result = run_app(&mut terminal, &mut app);
+  let result = run_app(&mut terminal, &mut app, &theme);
 
   disable_raw_mode()?;
   io::stdout().execute(LeaveAlternateScreen)?;
@@ -213,6 +220,7 @@ fn run_tui() -> io::Result<()> {
 fn run_app(
   terminal: &mut Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>,
   app: &mut App,
+  theme: &theme::ThemeColors,
 ) -> io::Result<()> {
   loop {
     terminal.draw(|frame| {
@@ -230,9 +238,9 @@ fn run_app(
         &app.filter
       };
       let filter_style = if app.filter.is_empty() {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme.filter_placeholder_fg)
       } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme.filter_active_fg)
       };
       let filter = Paragraph::new(filter_text)
         .style(filter_style)
@@ -249,33 +257,33 @@ fn run_app(
             EmulatorEntry::SectionHeader(s) => ListItem::new(Line::from(Span::styled(
               format!(" {}", s),
               Style::default()
-                .fg(Color::Cyan)
+                .fg(theme.header_fg)
                 .add_modifier(Modifier::BOLD),
             ))),
             EmulatorEntry::Android(e) => ListItem::new(Line::from(vec![
               Span::raw("   "),
-              Span::styled(&e.name, Style::default().fg(Color::Green)),
+              Span::styled(&e.name, Style::default().fg(theme.name_fg)),
               Span::raw("  "),
               Span::styled(
                 format!("[{}]", e.state),
-                Style::default().fg(state_color(&e.state)),
+                Style::default().fg(state_color(&e.state, theme)),
               ),
               Span::styled(
                 format!("  ({})", e.device_type),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.meta_fg),
               ),
             ])),
             EmulatorEntry::IOS(s) => ListItem::new(Line::from(vec![
               Span::raw("   "),
-              Span::styled(&s.name, Style::default().fg(Color::Green)),
+              Span::styled(&s.name, Style::default().fg(theme.name_fg)),
               Span::raw("  "),
               Span::styled(
                 format!("[{}]", s.state),
-                Style::default().fg(state_color(&s.state)),
+                Style::default().fg(state_color(&s.state, theme)),
               ),
               Span::styled(
                 format!("  ({})", s.runtime),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.meta_fg),
               ),
             ])),
           }
@@ -286,19 +294,19 @@ fn run_app(
         .block(Block::default().borders(Borders::ALL).title(" Emulators "))
         .highlight_style(
           Style::default()
-            .bg(Color::DarkGray)
+            .bg(theme.selection_bg)
             .add_modifier(Modifier::BOLD),
         );
       frame.render_stateful_widget(list, chunks[1], &mut app.list_state);
 
       // Help bar
       let help = Paragraph::new(Line::from(vec![
-        Span::styled(" j/k", Style::default().fg(Color::Yellow)),
-        Span::raw(" navigate  "),
-        Span::styled("Enter", Style::default().fg(Color::Yellow)),
-        Span::raw(" open  "),
-        Span::styled("q/Esc", Style::default().fg(Color::Yellow)),
-        Span::raw(" quit"),
+        Span::styled(" j/k", Style::default().fg(theme.help_key_fg)),
+        Span::styled(" navigate  ", Style::default().fg(theme.help_text_fg)),
+        Span::styled("Enter", Style::default().fg(theme.help_key_fg)),
+        Span::styled(" open  ", Style::default().fg(theme.help_text_fg)),
+        Span::styled("q/Esc", Style::default().fg(theme.help_key_fg)),
+        Span::styled(" quit", Style::default().fg(theme.help_text_fg)),
       ]));
       frame.render_widget(help, chunks[2]);
     })?;
