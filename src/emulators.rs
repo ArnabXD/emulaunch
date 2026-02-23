@@ -289,6 +289,7 @@ pub fn list_ios_simulators() -> Result<Vec<IOSSimulator>, String> {
   Err("iOS simulators are only available on macOS".to_string())
 }
 
+#[cfg(target_os = "macos")]
 fn parse_ios_simulators(json: &str) -> Result<Vec<IOSSimulator>, String> {
   #[derive(Deserialize)]
   struct DevicesResponse {

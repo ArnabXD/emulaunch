@@ -15,6 +15,7 @@ pub struct Config {
 pub enum CommandNotFoundError {
   AndroidEmulator { suggestion: String },
   Adb { suggestion: String },
+  #[cfg(target_os = "macos")]
   Xcrun { suggestion: String },
 }
 
@@ -29,6 +30,7 @@ impl std::fmt::Display for CommandNotFoundError {
         write!(f, "ADB command not found. {}\n\nPlease configure it in your config file:\n{}\n\nOr set the ADB_CMD environment variable.",
                        suggestion, get_config_paths_display())
       }
+      #[cfg(target_os = "macos")]
       CommandNotFoundError::Xcrun { suggestion } => {
         write!(f, "xcrun command not found. {}\n\nPlease configure it in your config file:\n{}\n\nOr set the XCRUN_CMD environment variable.",
                        suggestion, get_config_paths_display())
@@ -224,15 +226,4 @@ pub fn get_xcrun_cmd() -> Result<String, CommandNotFoundError> {
   let suggestion = "Install Xcode Command Line Tools: xcode-select --install".to_string();
 
   Err(CommandNotFoundError::Xcrun { suggestion })
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn get_xcrun_cmd() -> Result<String, CommandNotFoundError> {
-  // Non-macOS: still return a default, but it won't work
-  // This is for consistency - iOS functions won't be called anyway
-  Ok(
-    std::env::var("XCRUN_CMD")
-      .or_else(|_| load_config().and_then(|c| c.xcrun_cmd).ok_or(()))
-      .unwrap_or_else(|_| "xcrun".to_string()),
-  )
 }

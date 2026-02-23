@@ -10,15 +10,22 @@ permissions:
 
 jobs:
   release:
-    name: Release
+    name: Release (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-12
-          - macos-14
-          - windows-latest
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: macos-12
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
 
     steps:
       - name: Checkout
@@ -27,24 +34,30 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+          targets: ${{ matrix.target }}
 
-      - name: Install cargo-dist
+      - name: Install cargo-dist (Unix)
+        if: runner.os != 'Windows'
         run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.4/cargo-dist-installer.sh | sh
 
-      - name: Install cross-compilation tools (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install cargo-dist (Windows)
+        if: runner.os == 'Windows'
+        run: irm https://github.com/axodotdev/cargo-dist/releases/download/v0.30.4/cargo-dist-installer.ps1 | iex
+        shell: powershell
+
+      - name: Install cross-compilation tools (Linux aarch64)
+        if: matrix.cross
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Build release artifacts
-        run: cargo dist build --artifacts=local --target=* --installer=shell
+        run: cargo dist build --artifacts=local --target=${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-${{ matrix.os }}
+          name: artifacts-${{ matrix.target }}
           path: |
             target/distrib/
           retention-days: 7
