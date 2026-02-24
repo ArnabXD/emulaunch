@@ -2,6 +2,8 @@
 
 Interactive TUI for listing and launching Android emulators and iOS simulators.
 
+[![asciicast](https://asciinema.org/a/oGDuVW3Ge1nZMH0d.svg)](https://asciinema.org/a/oGDuVW3Ge1nZMH0d)
+
 ## Installation
 
 ### Quick Install (recommended)
