@@ -150,4 +150,4 @@ Each release includes:
 - `.github/workflows/ci.yml` - Runs `cargo check`, `cargo clippy -- -D warnings` on Ubuntu; builds on Ubuntu, macOS, and Windows
 - `.github/workflows/release.yml` - GitHub Actions workflow for building releases via `cargo-dist`
 - `dist-workspace.toml` - dist configuration for target platforms
-- `install.sh` - Shell installer script for end users
+

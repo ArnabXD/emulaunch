@@ -6,20 +6,21 @@ Interactive TUI for listing and launching Android emulators and iOS simulators.
 
 ## Installation
 
-### Quick Install (recommended)
+### Shell (macOS/Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ArnabXD/emulaunch/main/install.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/ArnabXD/emulaunch/releases/latest/download/emulaunch-installer.sh | sh
 ```
 
-Or with wget:
-```bash
-wget -qO- https://raw.githubusercontent.com/ArnabXD/emulaunch/main/install.sh | sh
+### PowerShell (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/ArnabXD/emulaunch/releases/latest/download/emulaunch-installer.ps1 | iex"
 ```
 
 ### Prebuilt Binaries
 
-Download prebuilt binaries from the [Releases](https://github.com/ArnabXD/emulaunch/releases) page.
+Download from the [latest release](https://github.com/ArnabXD/emulaunch/releases/latest) page.
 
 Supported platforms:
 - macOS (Intel x86_64 and Apple Silicon aarch64)
