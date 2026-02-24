@@ -42,10 +42,6 @@ impl ThemeName {
   }
 }
 
-fn rgb(r: u8, g: u8, b: u8) -> Color {
-  Color::Rgb(r, g, b)
-}
-
 fn parse_hex_color(s: &str) -> Option<Color> {
   let s = s.strip_prefix('#')?;
   if s.len() != 6 {
@@ -57,105 +53,109 @@ fn parse_hex_color(s: &str) -> Option<Color> {
   Some(Color::Rgb(r, g, b))
 }
 
+/// Shorthand for 256-color indexed palette.
+const fn c(n: u8) -> Color {
+  Color::Indexed(n)
+}
+
 fn base_theme(name: ThemeName) -> ThemeColors {
   match name {
-    // RGB equivalents of the original ANSI colors
     ThemeName::Default => ThemeColors {
-      header_fg: rgb(0, 205, 205),        // Cyan
-      name_fg: rgb(0, 205, 0),            // Green
-      state_booted_fg: rgb(0, 205, 0),    // Green
-      state_shutdown_fg: rgb(205, 0, 0),  // Red
-      state_unknown_fg: rgb(205, 205, 0), // Yellow
-      meta_fg: rgb(128, 128, 128),        // DarkGray
-      filter_placeholder_fg: rgb(128, 128, 128),
-      filter_active_fg: rgb(229, 229, 229), // White
-      selection_bg: rgb(68, 68, 68),        // DarkGray bg
-      help_key_fg: rgb(205, 205, 0),        // Yellow
-      help_text_fg: rgb(229, 229, 229),     // White
+      header_fg: Color::Cyan,
+      name_fg: Color::Green,
+      state_booted_fg: Color::Green,
+      state_shutdown_fg: Color::Red,
+      state_unknown_fg: Color::Yellow,
+      meta_fg: Color::DarkGray,
+      filter_placeholder_fg: Color::DarkGray,
+      filter_active_fg: Color::White,
+      selection_bg: Color::DarkGray,
+      help_key_fg: Color::Yellow,
+      help_text_fg: Color::White,
     },
     // https://github.com/catppuccin/catppuccin — Mocha palette
     ThemeName::CatppuccinMocha => ThemeColors {
-      header_fg: rgb(137, 180, 250),         // Blue
-      name_fg: rgb(166, 227, 161),           // Green
-      state_booted_fg: rgb(166, 227, 161),   // Green
-      state_shutdown_fg: rgb(243, 139, 168), // Red
-      state_unknown_fg: rgb(249, 226, 175),  // Yellow
-      meta_fg: rgb(147, 153, 178),           // Overlay0
-      filter_placeholder_fg: rgb(147, 153, 178),
-      filter_active_fg: rgb(205, 214, 244), // Text
-      selection_bg: rgb(69, 71, 90),        // Surface1
-      help_key_fg: rgb(245, 194, 231),      // Pink
-      help_text_fg: rgb(186, 194, 222),     // Subtext0
+      header_fg: c(111),        // Blue (#89b4fa)
+      name_fg: c(151),          // Green (#a6e3a1)
+      state_booted_fg: c(151),  // Green
+      state_shutdown_fg: c(211), // Red (#f38ba8)
+      state_unknown_fg: c(223), // Yellow (#f9e2af)
+      meta_fg: c(103),          // Overlay0 (#9399b2)
+      filter_placeholder_fg: c(103),
+      filter_active_fg: c(189), // Text (#cdd6f4)
+      selection_bg: c(59),      // Surface1 (#45475a)
+      help_key_fg: c(218),      // Pink (#f5c2e7)
+      help_text_fg: c(146),     // Subtext0 (#bac2de)
     },
     // https://github.com/catppuccin/catppuccin — Latte palette
     ThemeName::CatppuccinLatte => ThemeColors {
-      header_fg: rgb(30, 102, 245),        // Blue
-      name_fg: rgb(64, 160, 43),           // Green
-      state_booted_fg: rgb(64, 160, 43),   // Green
-      state_shutdown_fg: rgb(210, 15, 57), // Red
-      state_unknown_fg: rgb(223, 142, 29), // Yellow
-      meta_fg: rgb(140, 143, 161),         // Overlay0
-      filter_placeholder_fg: rgb(140, 143, 161),
-      filter_active_fg: rgb(76, 79, 105), // Text
-      selection_bg: rgb(188, 192, 204),   // Surface1
-      help_key_fg: rgb(234, 118, 203),    // Pink
-      help_text_fg: rgb(108, 111, 133),   // Subtext0
+      header_fg: c(27),         // Blue (#1e66f5)
+      name_fg: c(70),           // Green (#40a02b)
+      state_booted_fg: c(70),   // Green
+      state_shutdown_fg: c(161), // Red (#d20f39)
+      state_unknown_fg: c(172), // Yellow (#df8e1d)
+      meta_fg: c(103),          // Overlay0 (#8c8fa1)
+      filter_placeholder_fg: c(103),
+      filter_active_fg: c(59),  // Text (#4c4f69)
+      selection_bg: c(146),     // Surface1 (#bcc0cc)
+      help_key_fg: c(170),      // Pink (#ea76cb)
+      help_text_fg: c(60),      // Subtext0 (#6c6f85)
     },
     // https://draculatheme.com/contribute
     ThemeName::Dracula => ThemeColors {
-      header_fg: rgb(139, 233, 253),        // Cyan
-      name_fg: rgb(80, 250, 123),           // Green
-      state_booted_fg: rgb(80, 250, 123),   // Green
-      state_shutdown_fg: rgb(255, 85, 85),  // Red
-      state_unknown_fg: rgb(241, 250, 140), // Yellow
-      meta_fg: rgb(98, 114, 164),           // Comment
-      filter_placeholder_fg: rgb(98, 114, 164),
-      filter_active_fg: rgb(248, 248, 242), // Foreground
-      selection_bg: rgb(68, 71, 90),        // Current Line
-      help_key_fg: rgb(255, 121, 198),      // Pink
-      help_text_fg: rgb(248, 248, 242),     // Foreground
+      header_fg: c(117),        // Cyan (#8be9fd)
+      name_fg: c(83),           // Green (#50fa7b)
+      state_booted_fg: c(83),   // Green
+      state_shutdown_fg: c(203), // Red (#ff5555)
+      state_unknown_fg: c(228), // Yellow (#f1fa8c)
+      meta_fg: c(61),           // Comment (#6272a4)
+      filter_placeholder_fg: c(61),
+      filter_active_fg: c(231), // Foreground (#f8f8f2)
+      selection_bg: c(59),      // Current Line (#44475a)
+      help_key_fg: c(206),      // Pink (#ff79c6)
+      help_text_fg: c(231),     // Foreground
     },
     // https://github.com/enkia/tokyo-night-vscode-theme
     ThemeName::TokyoNight => ThemeColors {
-      header_fg: rgb(125, 207, 255),         // Blue
-      name_fg: rgb(158, 206, 106),           // Green
-      state_booted_fg: rgb(158, 206, 106),   // Green
-      state_shutdown_fg: rgb(247, 118, 142), // Red
-      state_unknown_fg: rgb(224, 175, 104),  // Yellow
-      meta_fg: rgb(86, 95, 137),             // Comment
-      filter_placeholder_fg: rgb(86, 95, 137),
-      filter_active_fg: rgb(169, 177, 214), // Foreground
-      selection_bg: rgb(41, 46, 66),        // Selection
-      help_key_fg: rgb(187, 154, 247),      // Purple
-      help_text_fg: rgb(169, 177, 214),     // Foreground
+      header_fg: c(117),        // Blue (#7dcfff)
+      name_fg: c(149),          // Green (#9ece6a)
+      state_booted_fg: c(149),  // Green
+      state_shutdown_fg: c(204), // Red (#f7768e)
+      state_unknown_fg: c(179), // Yellow (#e0af68)
+      meta_fg: c(60),           // Comment (#565f89)
+      filter_placeholder_fg: c(60),
+      filter_active_fg: c(146), // Foreground (#a9b1d6)
+      selection_bg: c(236),     // Selection (#292e42)
+      help_key_fg: c(141),      // Purple (#bb9af7)
+      help_text_fg: c(146),     // Foreground
     },
     // https://github.com/morhetz/gruvbox
     ThemeName::GruvboxDark => ThemeColors {
-      header_fg: rgb(131, 165, 152),       // Aqua
-      name_fg: rgb(184, 187, 38),          // Green
-      state_booted_fg: rgb(184, 187, 38),  // Green
-      state_shutdown_fg: rgb(251, 73, 52), // Red
-      state_unknown_fg: rgb(250, 189, 47), // Yellow
-      meta_fg: rgb(146, 131, 116),         // Gray
-      filter_placeholder_fg: rgb(146, 131, 116),
-      filter_active_fg: rgb(235, 219, 178), // Foreground
-      selection_bg: rgb(80, 73, 69),        // Bg2
-      help_key_fg: rgb(211, 134, 155),      // Purple
-      help_text_fg: rgb(213, 196, 161),     // Fg2
+      header_fg: c(108),        // Aqua (#83a598)
+      name_fg: c(142),          // Green (#b8bb26)
+      state_booted_fg: c(142),  // Green
+      state_shutdown_fg: c(202), // Red (#fb4934)
+      state_unknown_fg: c(214), // Yellow (#fabd2f)
+      meta_fg: c(101),          // Gray (#928374)
+      filter_placeholder_fg: c(101),
+      filter_active_fg: c(223), // Foreground (#ebdbb2)
+      selection_bg: c(239),     // Bg2 (#504945)
+      help_key_fg: c(174),      // Purple (#d3869b)
+      help_text_fg: c(181),     // Fg2 (#d5c4a1)
     },
     // https://www.nordtheme.com/docs/colors-and-palettes
     ThemeName::Nord => ThemeColors {
-      header_fg: rgb(136, 192, 208),        // Nord8 (frost cyan)
-      name_fg: rgb(163, 190, 140),          // Nord14 (green)
-      state_booted_fg: rgb(163, 190, 140),  // Nord14
-      state_shutdown_fg: rgb(191, 97, 106), // Nord11 (red)
-      state_unknown_fg: rgb(235, 203, 139), // Nord13 (yellow)
-      meta_fg: rgb(76, 86, 106),            // Nord3 (comment)
-      filter_placeholder_fg: rgb(76, 86, 106),
-      filter_active_fg: rgb(216, 222, 233), // Nord4 (snow)
-      selection_bg: rgb(67, 76, 94),        // Nord2
-      help_key_fg: rgb(180, 142, 173),      // Nord15 (purple)
-      help_text_fg: rgb(229, 233, 240),     // Nord5
+      header_fg: c(110),        // Nord8 frost cyan (#88c0d0)
+      name_fg: c(144),          // Nord14 green (#a3be8c)
+      state_booted_fg: c(144),  // Nord14
+      state_shutdown_fg: c(131), // Nord11 red (#bf616a)
+      state_unknown_fg: c(222), // Nord13 yellow (#ebcb8b)
+      meta_fg: c(240),          // Nord3 comment (#4c566a)
+      filter_placeholder_fg: c(240),
+      filter_active_fg: c(188), // Nord4 snow (#d8dee9)
+      selection_bg: c(239),     // Nord2 (#434c5e)
+      help_key_fg: c(139),      // Nord15 purple (#b48ead)
+      help_text_fg: c(189),     // Nord5 (#e5e9f0)
     },
   }
 }

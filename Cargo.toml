@@ -1,6 +1,6 @@
 [package]
 name = "emulaunch"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["ArnabXD"]
 description = "Interactive TUI for listing and launching Android emulators and iOS simulators"
