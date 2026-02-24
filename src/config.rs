@@ -128,13 +128,21 @@ fn get_adb_paths() -> Vec<PathBuf> {
 pub fn get_config_paths() -> Vec<PathBuf> {
   let mut paths = Vec::new();
 
-  // Try XDG config directory first
-  if let Some(config_dir) = dirs::config_dir() {
-    paths.push(config_dir.join("emulaunch").join("config.toml"));
-  }
-
-  // Fallback to home directory
   if let Some(home_dir) = dirs::home_dir() {
+    // XDG-style path (~/.config/emulaunch/config.toml)
+    // Checked explicitly because dirs::config_dir() returns
+    // ~/Library/Application Support on macOS, not ~/.config
+    paths.push(home_dir.join(".config").join("emulaunch").join("config.toml"));
+
+    // Platform config dir (~/Library/Application Support on macOS, etc.)
+    if let Some(config_dir) = dirs::config_dir() {
+      let platform_path = config_dir.join("emulaunch").join("config.toml");
+      if !paths.contains(&platform_path) {
+        paths.push(platform_path);
+      }
+    }
+
+    // Legacy fallback
     paths.push(home_dir.join(".emulaunch").join("config.toml"));
   }
 
