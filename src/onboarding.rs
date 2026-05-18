@@ -388,7 +388,6 @@ fn run_sdkmanager_install(
 /// sdkmanager's carriage-return progress updates appear as individual lines.
 fn stream_lines(reader: impl io::Read + Send + 'static, tx: mpsc::Sender<Msg>) {
   std::thread::spawn(move || {
-    use std::io::Read;
     let mut reader = reader;
     let mut buf = [0u8; 512];
     let mut pending = String::new();

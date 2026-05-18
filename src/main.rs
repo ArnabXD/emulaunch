@@ -89,7 +89,6 @@ struct App {
   filtered_indices: Vec<usize>,
   list_state: ListState,
   filter: String,
-  result_message: Option<String>,
   show_help: bool,
   setup_android_requested: bool,
 }
@@ -109,7 +108,6 @@ impl App {
       filtered_indices,
       list_state,
       filter: String::new(),
-      result_message: None,
       show_help: false,
       setup_android_requested: false,
     }
@@ -308,9 +306,7 @@ fn run_tui() -> io::Result<()> {
   disable_raw_mode()?;
   io::stdout().execute(LeaveAlternateScreen)?;
 
-  if let Some(m) = msg? {
-    println!("{}", m);
-  }
+  msg?;
   Ok(())
 }
 
@@ -340,7 +336,7 @@ fn run_tui_loop(
       continue;
     }
 
-    return Ok(app.result_message);
+    return Ok(None);
   }
 }
 
@@ -660,14 +656,7 @@ fn run_app(
 
             if let Some(entry) = app.selected_entry() {
               match emulators::open_entry(entry) {
-                Ok(msg) => {
-                  app.result_message = Some(msg);
-                  break;
-                }
-                Err(e) => {
-                  app.result_message = Some(format!("Error: {}", e));
-                  break;
-                }
+                Ok(_) | Err(_) => break,
               }
             }
           }
