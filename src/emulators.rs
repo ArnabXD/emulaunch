@@ -49,6 +49,8 @@ pub enum EmulatorEntry {
   SectionHeader(String),
   Android(AndroidEmulator),
   IOS(IOSSimulator),
+  /// Shown when no Android emulators exist but iOS simulators do
+  SetupAndroidPrompt,
 }
 
 impl EmulatorEntry {
@@ -57,6 +59,7 @@ impl EmulatorEntry {
       EmulatorEntry::SectionHeader(s) => s,
       EmulatorEntry::Android(e) => &e.name,
       EmulatorEntry::IOS(s) => &s.name,
+      EmulatorEntry::SetupAndroidPrompt => "+ Set up Android Virtual Device...",
     }
   }
 
@@ -71,6 +74,7 @@ impl fmt::Display for EmulatorEntry {
       EmulatorEntry::SectionHeader(s) => write!(f, "{}", s),
       EmulatorEntry::Android(e) => write!(f, "{} [{}] ({})", e.name, e.state, e.device_type),
       EmulatorEntry::IOS(s) => write!(f, "{} [{}] ({})", s.name, s.state, s.runtime),
+      EmulatorEntry::SetupAndroidPrompt => write!(f, "Set up Android Virtual Device"),
     }
   }
 }
@@ -409,11 +413,15 @@ pub fn find_emulator(name: &str) -> Result<EmulatorType, String> {
   Err(format!("Emulator '{}' not found", name))
 }
 
-/// Collect all emulators into a unified list with section headers
+/// Collect all emulators into a unified list with section headers.
+/// When iOS simulators exist but no Android, a setup prompt is added so users
+/// can launch the Android setup wizard from the main TUI.
 pub fn collect_all_entries() -> Vec<EmulatorEntry> {
   let mut entries = Vec::new();
 
   let android = list_android_emulators().unwrap_or_default();
+  let ios = list_ios_simulators().unwrap_or_default();
+
   if !android.is_empty() {
     entries.push(EmulatorEntry::SectionHeader(
       SECTION_ANDROID_EMULATORS.to_string(),
@@ -421,9 +429,15 @@ pub fn collect_all_entries() -> Vec<EmulatorEntry> {
     for emu in android {
       entries.push(EmulatorEntry::Android(emu));
     }
+  } else if !ios.is_empty() {
+    // Has iOS but no Android — show the setup prompt so the user can act.
+    // When both are absent, entries stays empty and run_tui auto-triggers onboarding.
+    entries.push(EmulatorEntry::SectionHeader(
+      SECTION_ANDROID_EMULATORS.to_string(),
+    ));
+    entries.push(EmulatorEntry::SetupAndroidPrompt);
   }
 
-  let ios = list_ios_simulators().unwrap_or_default();
   if !ios.is_empty() {
     entries.push(EmulatorEntry::SectionHeader(
       SECTION_IOS_SIMULATORS.to_string(),
@@ -436,12 +450,16 @@ pub fn collect_all_entries() -> Vec<EmulatorEntry> {
   entries
 }
 
-/// Open an emulator entry (non-header)
+/// Open an emulator entry (non-header).
+/// Returns `Err` for SetupAndroidPrompt — callers should handle that variant before
+/// calling this function.
 pub fn open_entry(entry: &EmulatorEntry) -> Result<String, String> {
   match entry {
     EmulatorEntry::Android(e) => open_android_emulator(&e.id),
     EmulatorEntry::IOS(s) => open_ios_simulator(&s.udid),
-    EmulatorEntry::SectionHeader(_) => Err("Cannot open a section header".to_string()),
+    EmulatorEntry::SectionHeader(_) | EmulatorEntry::SetupAndroidPrompt => {
+      Err("Not an openable entry".to_string())
+    }
   }
 }
 
