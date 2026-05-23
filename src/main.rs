@@ -1,6 +1,5 @@
 mod config;
 mod emulators;
-mod onboarding;
 mod theme;
 
 use clap::{Parser, Subcommand};
@@ -35,8 +34,6 @@ enum Commands {
     /// Name of the emulator to open
     name: Vec<String>,
   },
-  /// Run the Android AVD setup wizard
-  SetupAndroid,
 }
 
 fn main() {
@@ -69,12 +66,6 @@ fn main() {
         }
       }
     }
-    Some(Commands::SetupAndroid) => {
-      if let Err(e) = run_setup_android() {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-      }
-    }
     None => {
       if let Err(e) = run_tui() {
         eprintln!("Error: {}", e);
@@ -89,8 +80,8 @@ struct App {
   filtered_indices: Vec<usize>,
   list_state: ListState,
   filter: String,
+  result_message: Option<String>,
   show_help: bool,
-  setup_android_requested: bool,
 }
 
 impl App {
@@ -108,8 +99,8 @@ impl App {
       filtered_indices,
       list_state,
       filter: String::new(),
+      result_message: None,
       show_help: false,
-      setup_android_requested: false,
     }
   }
 
@@ -238,13 +229,6 @@ fn get_detail_data(app: &App) -> Option<DetailData> {
       ],
     }),
     EmulatorEntry::SectionHeader(_) => None,
-    EmulatorEntry::SetupAndroidPrompt => Some(DetailData {
-      kind: "Android Setup".to_string(),
-      fields: vec![(
-        "Action".to_string(),
-        "Press Enter to launch the Android AVD setup wizard".to_string(),
-      )],
-    }),
   }
 }
 
@@ -268,27 +252,13 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
   }
 }
 
-fn run_setup_android() -> io::Result<()> {
-  let cfg = config::load_config();
-  let theme = theme::resolve_theme(
-    cfg.as_ref().and_then(|c| c.theme.as_deref()),
-    cfg.as_ref().and_then(|c| c.theme_overrides.as_ref()),
-  );
-
-  enable_raw_mode()?;
-  io::stdout().execute(EnterAlternateScreen)?;
-  let backend = ratatui::backend::CrosstermBackend::new(io::stdout());
-  let mut terminal = Terminal::new(backend)?;
-
-  let result = onboarding::run_onboarding(&mut terminal, &theme);
-
-  disable_raw_mode()?;
-  io::stdout().execute(LeaveAlternateScreen)?;
-  result?;
-  Ok(())
-}
-
 fn run_tui() -> io::Result<()> {
+  let entries = emulators::collect_all_entries();
+  if entries.is_empty() {
+    println!("No emulators or simulators found.");
+    return Ok(());
+  }
+
   let cfg = config::load_config();
   let theme = theme::resolve_theme(
     cfg.as_ref().and_then(|c| c.theme.as_deref()),
@@ -300,44 +270,17 @@ fn run_tui() -> io::Result<()> {
   let backend = ratatui::backend::CrosstermBackend::new(io::stdout());
   let mut terminal = Terminal::new(backend)?;
 
-  let msg = run_tui_loop(&mut terminal, &theme);
+  let mut app = App::new(entries);
+  let result = run_app(&mut terminal, &mut app, &theme);
 
-  // Always restore the terminal before printing anything
   disable_raw_mode()?;
   io::stdout().execute(LeaveAlternateScreen)?;
 
-  msg?;
-  Ok(())
-}
-
-/// Returns `Ok(Some(msg))` when a launch message should be printed after cleanup,
-/// `Ok(None)` on normal exit.
-fn run_tui_loop(
-  terminal: &mut Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>,
-  theme: &theme::ThemeColors,
-) -> io::Result<Option<String>> {
-  loop {
-    let entries = emulators::collect_all_entries();
-
-    // Nothing at all — run onboarding wizard automatically
-    if entries.is_empty() {
-      match onboarding::run_onboarding(terminal, theme)? {
-        true => continue,  // wizard succeeded, reload entries
-        false => return Ok(None),
-      }
-    }
-
-    let mut app = App::new(entries);
-    run_app(terminal, &mut app, theme)?;
-
-    if app.setup_android_requested {
-      // User selected the setup prompt in the list — run wizard and reload
-      onboarding::run_onboarding(terminal, theme)?;
-      continue;
-    }
-
-    return Ok(None);
+  if let Some(msg) = app.result_message {
+    println!("{}", msg);
   }
+
+  result
 }
 
 fn run_app(
@@ -448,15 +391,6 @@ fn run_app(
                 ),
               ]))
             }
-            EmulatorEntry::SetupAndroidPrompt => ListItem::new(Line::from(vec![
-              Span::raw("   "),
-              Span::styled(
-                "+ Set up Android Virtual Device...",
-                Style::default()
-                  .fg(theme.state_booted_fg)
-                  .add_modifier(Modifier::BOLD),
-              ),
-            ])),
           }
         })
         .collect();
@@ -642,21 +576,16 @@ fn run_app(
           KeyCode::Down => app.move_selection(1),
           KeyCode::Up => app.move_selection(-1),
           KeyCode::Enter => {
-            // Resolve the bool first so the immutable borrow of `app` ends
-            // before we mutate app.setup_android_requested.
-            let is_setup = app
-              .selected_entry()
-              .map(|e| matches!(e, EmulatorEntry::SetupAndroidPrompt))
-              .unwrap_or(false);
-
-            if is_setup {
-              app.setup_android_requested = true;
-              break;
-            }
-
             if let Some(entry) = app.selected_entry() {
               match emulators::open_entry(entry) {
-                Ok(_) | Err(_) => break,
+                Ok(msg) => {
+                  app.result_message = Some(msg);
+                  break;
+                }
+                Err(e) => {
+                  app.result_message = Some(format!("Error: {}", e));
+                  break;
+                }
               }
             }
           }
