@@ -50,11 +50,13 @@ emulaunch open <name>
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` / arrows | Navigate |
+| `↑` / `↓`, `Ctrl+N` / `Ctrl+P` | Navigate |
 | `Enter` | Open selected emulator |
-| `q` / `Esc` | Quit |
-| Type any text | Filter list |
-| `Backspace` | Clear filter |
+| Type any text | Filter list (substring match) |
+| `Backspace` / `Ctrl+U` | Delete a character / clear the filter |
+| `Ctrl+R` / `F5` | Refresh the list |
+| `?` / `F1` | Show keyboard shortcuts |
+| `Esc` / `Ctrl+C` | Quit |
 
 ## Configuration
 

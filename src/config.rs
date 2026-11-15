@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Config {
@@ -85,44 +86,40 @@ Common locations:\n  macOS: ~/Library/Android/sdk/platform-tools/adb\n  Linux: ~
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const SUGGESTION_XCRUN: &str = "Install Xcode Command Line Tools: xcode-select --install";
 
-/// Platform-specific Android SDK paths
-fn get_android_emulator_paths() -> Vec<PathBuf> {
-  let home = match dirs::home_dir() {
-    Some(h) => h,
-    None => return Vec::new(),
-  };
+/// Candidate Android SDK roots, most specific first: `ANDROID_HOME`,
+/// `ANDROID_SDK_ROOT`, then the platform's default install location.
+fn android_sdk_roots() -> Vec<PathBuf> {
+  let mut roots: Vec<PathBuf> = ["ANDROID_HOME", "ANDROID_SDK_ROOT"]
+    .iter()
+    .filter_map(std::env::var_os)
+    .filter(|v| !v.is_empty())
+    .map(PathBuf::from)
+    .collect();
 
   #[cfg(target_os = "macos")]
-  return vec![home.join("Library/Android/sdk/emulator/emulator")];
-
+  roots.extend(dirs::home_dir().map(|h| h.join("Library/Android/sdk")));
   #[cfg(target_os = "linux")]
-  return vec![home.join("Android/Sdk/emulator/emulator")];
-
+  roots.extend(dirs::home_dir().map(|h| h.join("Android/Sdk")));
   #[cfg(target_os = "windows")]
-  return vec![home.join("AppData/Local/Android/Sdk/emulator/emulator.exe")];
+  roots.extend(dirs::data_local_dir().map(|d| d.join("Android/Sdk")));
 
-  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-  return Vec::new();
+  roots
 }
 
-/// Platform-specific ADB paths
+/// Locations of an SDK tool (e.g. `emulator/emulator`, `platform-tools/adb`).
+fn android_sdk_tool_paths(relative: &str) -> Vec<PathBuf> {
+  android_sdk_roots()
+    .into_iter()
+    .map(|root| root.join(format!("{}{}", relative, std::env::consts::EXE_SUFFIX)))
+    .collect()
+}
+
+fn get_android_emulator_paths() -> Vec<PathBuf> {
+  android_sdk_tool_paths("emulator/emulator")
+}
+
 fn get_adb_paths() -> Vec<PathBuf> {
-  let home = match dirs::home_dir() {
-    Some(h) => h,
-    None => return Vec::new(),
-  };
-
-  #[cfg(target_os = "macos")]
-  return vec![home.join("Library/Android/sdk/platform-tools/adb")];
-
-  #[cfg(target_os = "linux")]
-  return vec![home.join("Android/Sdk/platform-tools/adb")];
-
-  #[cfg(target_os = "windows")]
-  return vec![home.join("AppData/Local/Android/Sdk/platform-tools/adb.exe")];
-
-  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-  return Vec::new();
+  android_sdk_tool_paths("platform-tools/adb")
 }
 
 pub fn get_config_paths() -> Vec<PathBuf> {
@@ -158,38 +155,41 @@ fn get_config_paths_display() -> String {
     .join("\n")
 }
 
-pub fn load_config() -> Option<Config> {
-  for path in get_config_paths() {
-    if path.exists() {
-      let contents = std::fs::read_to_string(&path).ok()?;
-      return toml::from_str(&contents).ok();
-    }
-  }
-  None
+/// Load the config file once per process. A missing file yields `None`; an
+/// unreadable or invalid file is reported on stderr and then ignored.
+pub fn load_config() -> Option<&'static Config> {
+  static CONFIG: OnceLock<Option<Config>> = OnceLock::new();
+  CONFIG
+    .get_or_init(|| {
+      let path = get_config_paths().into_iter().find(|p| p.exists())?;
+      let parsed = std::fs::read_to_string(&path)
+        .map_err(|e| e.to_string())
+        .and_then(|contents| toml::from_str(&contents).map_err(|e| e.to_string()));
+      match parsed {
+        Ok(config) => Some(config),
+        Err(e) => {
+          eprintln!("warning: ignoring {}: {}", path.display(), e);
+          None
+        }
+      }
+    })
+    .as_ref()
 }
 
-fn command_exists(cmd: &str) -> bool {
-  #[cfg(target_os = "windows")]
-  {
-    std::process::Command::new("where")
-      .arg(cmd)
-      .output()
-      .map(|o| o.status.success())
-      .unwrap_or(false)
-  }
-
-  #[cfg(not(target_os = "windows"))]
-  {
-    std::process::Command::new("which")
-      .arg(cmd)
-      .output()
-      .map(|o| o.status.success())
-      .unwrap_or(false)
+/// Print a warning to stderr at most once per process. Commands are resolved
+/// again on every TUI refresh, and repeated stderr output would corrupt the screen.
+fn warn_once(msg: String) {
+  static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+  let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+  if !seen.contains(&msg) {
+    eprintln!("warning: {}", msg);
+    seen.push(msg);
   }
 }
 
-fn file_exists(path: &str) -> bool {
-  PathBuf::from(path).exists()
+/// True if `cmd` is a bare command found on PATH or a path to an executable file.
+fn is_runnable(cmd: &str) -> bool {
+  which::which(cmd).is_ok()
 }
 
 /// Generic command resolution helper
@@ -205,18 +205,20 @@ where
 {
   // Check config first
   if let Some(config) = load_config() {
-    if let Some(cmd) = config_key(&config) {
-      if command_exists(cmd) || file_exists(cmd) {
+    if let Some(cmd) = config_key(config) {
+      if is_runnable(cmd) {
         return Ok(cmd.to_string());
       }
+      warn_once(format!("configured command '{}' not found, ignoring", cmd));
     }
   }
 
   // Check environment variable
   if let Ok(cmd) = std::env::var(env_var) {
-    if command_exists(&cmd) || file_exists(&cmd) {
+    if is_runnable(&cmd) {
       return Ok(cmd);
     }
+    warn_once(format!("${} is set to '{}' but not found, ignoring", env_var, cmd));
   }
 
   // Try platform-specific paths
@@ -227,7 +229,7 @@ where
   }
 
   // Fall back to simple command name
-  if command_exists(default_cmd) {
+  if is_runnable(default_cmd) {
     return Ok(default_cmd.to_string());
   }
 
@@ -272,4 +274,99 @@ pub fn get_xcrun_cmd() -> Result<String, CommandNotFoundError> {
       suggestion: format!("{}\n\n{}", msg, SUGGESTION_XCRUN),
     },
   )
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn the_documented_config_file_parses() {
+    let config: Config = toml::from_str(
+      r##"
+        android_emulator_cmd = "/sdk/emulator/emulator"
+        adb_cmd = "/sdk/platform-tools/adb"
+        xcrun_cmd = "/usr/bin/xcrun"
+        theme = "dracula"
+
+        [theme_overrides]
+        header_fg = "#ff00ff"
+        selection_bg = "#202020"
+      "##,
+    )
+    .unwrap();
+
+    assert_eq!(
+      config.android_emulator_cmd.as_deref(),
+      Some("/sdk/emulator/emulator")
+    );
+    assert_eq!(config.adb_cmd.as_deref(), Some("/sdk/platform-tools/adb"));
+    assert_eq!(config.xcrun_cmd.as_deref(), Some("/usr/bin/xcrun"));
+    assert_eq!(config.theme.as_deref(), Some("dracula"));
+
+    let overrides = config.theme_overrides.unwrap();
+    assert_eq!(overrides.header_fg.as_deref(), Some("#ff00ff"));
+    assert_eq!(overrides.selection_bg.as_deref(), Some("#202020"));
+    assert_eq!(overrides.name_fg, None);
+  }
+
+  #[test]
+  fn an_empty_config_file_means_all_defaults() {
+    let config: Config = toml::from_str("").unwrap();
+    assert!(config.android_emulator_cmd.is_none());
+    assert!(config.adb_cmd.is_none());
+    assert!(config.xcrun_cmd.is_none());
+    assert!(config.theme.is_none());
+    assert!(config.theme_overrides.is_none());
+  }
+
+  #[test]
+  fn unknown_keys_are_tolerated() {
+    let config: Config = toml::from_str("adb_cmd = \"adb\"\nsome_future_option = true\n").unwrap();
+    assert_eq!(config.adb_cmd.as_deref(), Some("adb"));
+  }
+
+  #[test]
+  fn values_of_the_wrong_type_are_an_error() {
+    assert!(toml::from_str::<Config>("adb_cmd = 42").is_err());
+    assert!(toml::from_str::<Config>("adb_cmd = [").is_err());
+  }
+
+  #[test]
+  fn config_files_are_searched_in_priority_order() {
+    let paths = get_config_paths();
+    // Needs a home directory, which CI runners have
+    if dirs::home_dir().is_none() {
+      return;
+    }
+    let first = paths.first().unwrap();
+    let last = paths.last().unwrap();
+    assert!(
+      first.ends_with(".config/emulaunch/config.toml"),
+      "{:?}",
+      first
+    );
+    assert!(last.ends_with(".emulaunch/config.toml"), "{:?}", last);
+  }
+
+  #[test]
+  fn sdk_tool_paths_have_the_platform_executable_suffix() {
+    for path in android_sdk_tool_paths("platform-tools/adb") {
+      let name = path.file_name().unwrap().to_string_lossy().into_owned();
+      assert_eq!(name, format!("adb{}", std::env::consts::EXE_SUFFIX));
+      assert!(path.parent().unwrap().ends_with("platform-tools"));
+    }
+  }
+
+  #[test]
+  fn command_not_found_errors_name_the_tool_and_how_to_configure_it() {
+    let err = CommandNotFoundError::Adb {
+      suggestion: "hint".to_string(),
+    }
+    .to_string();
+    assert!(err.contains("ADB command not found"));
+    assert!(err.contains("hint"));
+    assert!(err.contains("ADB_CMD"));
+    assert!(err.contains("config.toml"));
+  }
 }

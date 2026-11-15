@@ -44,7 +44,8 @@ impl ThemeName {
 
 fn parse_hex_color(s: &str) -> Option<Color> {
   let s = s.strip_prefix('#')?;
-  if s.len() != 6 {
+  // The slicing below is by byte offset, so reject anything non-ASCII first
+  if s.len() != 6 || !s.is_ascii() {
     return None;
   }
   let r = u8::from_str_radix(&s[0..2], 16).ok()?;
@@ -191,4 +192,144 @@ pub fn resolve_theme(theme_name: Option<&str>, overrides: Option<&ThemeOverrides
   }
 
   colors
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn hex_colors_with_multibyte_characters_are_rejected_not_a_panic() {
+    // "aébcd" is 6 bytes, so the length check passes, but byte 2 is in the middle of 'é'
+    assert_eq!(parse_hex_color("#aébcd"), None);
+  }
+
+  // --- hex colours -----------------------------------------------------
+
+  #[test]
+  fn hex_colors_are_parsed_to_rgb() {
+    assert_eq!(parse_hex_color("#ff8800"), Some(Color::Rgb(255, 136, 0)));
+    assert_eq!(parse_hex_color("#000000"), Some(Color::Rgb(0, 0, 0)));
+    assert_eq!(
+      parse_hex_color("#AbCdEf"),
+      Some(Color::Rgb(0xab, 0xcd, 0xef))
+    );
+  }
+
+  #[test]
+  fn malformed_hex_colors_are_rejected() {
+    for bad in [
+      "", "#", "ff8800", "#ff88", "#ff88000", "#gg0000", "#ff 800", "red",
+    ] {
+      assert_eq!(parse_hex_color(bad), None, "for {:?}", bad);
+    }
+  }
+
+  // --- theme names -----------------------------------------------------
+
+  fn name_of(input: &str) -> String {
+    format!("{:?}", ThemeName::from_str(input))
+  }
+
+  #[test]
+  fn theme_names_are_case_insensitive_and_accept_aliases() {
+    assert_eq!(name_of("dracula"), "Dracula");
+    assert_eq!(name_of("DRACULA"), "Dracula");
+    assert_eq!(name_of("Catppuccin Mocha"), "CatppuccinMocha");
+    assert_eq!(name_of("catppuccin-latte"), "CatppuccinLatte");
+    assert_eq!(name_of("tokyonight"), "TokyoNight");
+    assert_eq!(name_of("tokyo-night"), "TokyoNight");
+    assert_eq!(name_of("gruvbox"), "GruvboxDark");
+    assert_eq!(name_of("nord"), "Nord");
+  }
+
+  #[test]
+  fn unknown_theme_names_fall_back_to_the_default() {
+    assert_eq!(name_of("no-such-theme"), "Default");
+    assert_eq!(name_of(""), "Default");
+  }
+
+  // --- resolving a theme -----------------------------------------------
+
+  #[test]
+  fn no_theme_means_the_default_palette() {
+    let theme = resolve_theme(None, None);
+    assert_eq!(theme.header_fg, Color::Cyan);
+    assert_eq!(theme.state_booted_fg, Color::Green);
+    assert_eq!(theme.state_shutdown_fg, Color::Red);
+  }
+
+  #[test]
+  fn a_named_theme_changes_the_palette() {
+    let default = resolve_theme(None, None);
+    let dracula = resolve_theme(Some("dracula"), None);
+    assert_ne!(dracula.header_fg, default.header_fg);
+  }
+
+  #[test]
+  fn overrides_replace_only_the_fields_they_set() {
+    let overrides = ThemeOverrides {
+      header_fg: Some("#112233".to_string()),
+      selection_bg: Some("#445566".to_string()),
+      ..Default::default()
+    };
+    let base = resolve_theme(Some("nord"), None);
+    let themed = resolve_theme(Some("nord"), Some(&overrides));
+
+    assert_eq!(themed.header_fg, Color::Rgb(0x11, 0x22, 0x33));
+    assert_eq!(themed.selection_bg, Color::Rgb(0x44, 0x55, 0x66));
+    // Untouched fields keep the base theme's values
+    assert_eq!(themed.name_fg, base.name_fg);
+    assert_eq!(themed.help_key_fg, base.help_key_fg);
+  }
+
+  #[test]
+  fn invalid_overrides_are_ignored() {
+    let overrides = ThemeOverrides {
+      header_fg: Some("not-a-color".to_string()),
+      name_fg: Some("#aébcd".to_string()),
+      ..Default::default()
+    };
+    let base = resolve_theme(None, None);
+    let themed = resolve_theme(None, Some(&overrides));
+
+    assert_eq!(themed.header_fg, base.header_fg);
+    assert_eq!(themed.name_fg, base.name_fg);
+  }
+
+  #[test]
+  fn every_override_field_is_applied() {
+    let hex = Some("#010203".to_string());
+    let overrides = ThemeOverrides {
+      header_fg: hex.clone(),
+      name_fg: hex.clone(),
+      state_booted_fg: hex.clone(),
+      state_shutdown_fg: hex.clone(),
+      state_unknown_fg: hex.clone(),
+      meta_fg: hex.clone(),
+      filter_placeholder_fg: hex.clone(),
+      filter_active_fg: hex.clone(),
+      selection_bg: hex.clone(),
+      help_key_fg: hex.clone(),
+      help_text_fg: hex,
+    };
+    let t = resolve_theme(None, Some(&overrides));
+    let want = Color::Rgb(1, 2, 3);
+
+    for (field, color) in [
+      ("header_fg", t.header_fg),
+      ("name_fg", t.name_fg),
+      ("state_booted_fg", t.state_booted_fg),
+      ("state_shutdown_fg", t.state_shutdown_fg),
+      ("state_unknown_fg", t.state_unknown_fg),
+      ("meta_fg", t.meta_fg),
+      ("filter_placeholder_fg", t.filter_placeholder_fg),
+      ("filter_active_fg", t.filter_active_fg),
+      ("selection_bg", t.selection_bg),
+      ("help_key_fg", t.help_key_fg),
+      ("help_text_fg", t.help_text_fg),
+    ] {
+      assert_eq!(color, want, "{} was not overridden", field);
+    }
+  }
 }
